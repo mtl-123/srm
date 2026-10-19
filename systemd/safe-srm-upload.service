@@ -1,0 +1,8 @@
+[Unit]
+Description=Upload queued safe-srm archives for this user
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/srm remote sync
+NoNewPrivileges=true
+TimeoutStartSec=infinity

@@ -1,0 +1,44 @@
+# ===================== 仅忽略以下无关文件/目录，其余全部正常追踪 ======================
+# 编辑器/IDE临时文件（开发工具生成，无需提交）
+*.swp
+*.swo
+*.tmp
+.idea/
+.vscode/
+*.iml
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# 系统临时文件（不同系统生成，无需提交）
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Rust项目构建/编译产物（cargo build生成，无需提交，自动忽略）
+target/
+dist/
+__pycache__/
+Cargo.bak
+artifacts/
+.srm/
+*.part
+*.pending
+*.pem
+*.key
+
+# 日志/临时输出文件（项目运行生成，无需提交）
+*.log
+*.out
+tmp/
+temp/
+
+# 环境变量配置文件（本地私钥/配置，无需提交）
+.env
+.env.*
+!.env.example
+
+# ===================== 以下为你的自定义保留项，已默认追踪，无需额外配置 ======================
+# src/ 目录、.github/ 目录、main.rs、Cargo.toml、Cargo.lock、README.md、src/main.rs、.github/workflows/srm-ci.yml
+# 以上文件/目录均会被Git正常追踪，无需在.gitignore中写任何规则

@@ -1,0 +1,7 @@
+[Unit]
+Description=Clean expired safe-srm trash for this user
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/srm clean
+NoNewPrivileges=true

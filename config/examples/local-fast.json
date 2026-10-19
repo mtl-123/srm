@@ -1,0 +1,9 @@
+{
+  "backend": "local",
+  "local_store": null,
+  "volume_stores": ["/data/.safe-srm-1000"],
+  "expire_days": 7,
+  "batch_size": 256,
+  "directory_strategy": "rename",
+  "remote": null
+}

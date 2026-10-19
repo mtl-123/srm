@@ -1,0 +1,9 @@
+* text=auto
+*.rs text eol=lf
+*.sh text eol=lf
+*.bash text eol=lf
+*.py text eol=lf
+*.yml text eol=lf
+*.md text eol=lf
+_srm text eol=lf
+Cargo.lock text eol=lf

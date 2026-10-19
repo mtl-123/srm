@@ -1,0 +1,10 @@
+[Unit]
+Description=Upload root's queued safe-srm archives
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/bin/srm remote sync
+NoNewPrivileges=true
+TimeoutStartSec=infinity

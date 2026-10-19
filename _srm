@@ -1,0 +1,140 @@
+#compdef srm
+# Description-bearing completion; no network calls or privileged commands.
+local -a cmd_descriptions remote_commands options ids
+local command sub helper config='' offset=2 language=${SRM_LANG:-}
+local encoding=${LC_ALL:-${LC_CTYPE:-${LANG:-C}}} messages=${LC_ALL:-${LC_MESSAGES:-${LANG:-C}}}
+if [[ $messages != C && $messages != POSIX && -n ${LANGUAGE:-} ]]; then messages=${LANGUAGE%%:*}; fi
+cmd_descriptions=(
+ 'delete:删除文件或目录，移入回收站' 'del:安全删除（delete 简写）'
+ 'restore:按 ID 恢复文件' 'res:恢复文件（restore 简写）'
+ 'list:查看回收站' 'ls:查看回收站（list 简写）'
+ 'clean:永久清理过期项' 'cln:清理过期项（clean 简写）'
+ 'empty:确认后永久清空' 'doctor:检查异常和中断记录'
+ 'recover:修复具有完整备份的中断记录' 'config:查看或初始化配置'
+ 'remote:管理 SSH 远程存储' 'help:查看子命令帮助'
+ '--rm:显式按 rm 参数解析文件名' '--config:指定配置文件'
+ '--help:显示帮助' '--version:显示版本'
+)
+remote_commands=(
+ 'init:检查并创建已配置的远程目录' 'status:查看本地上传队列'
+ 'list:列出远程归档' 'sync:上传待处理队列'
+ 'retarget:将待上传项目改用当前远程配置'
+ 'restore:下载并恢复远程对象' 'delete:永久删除远程对象'
+)
+while [[ $words[offset] = --config || $words[offset] = --lang || $words[offset] = --lang=* ]]; do
+  case $words[offset] in
+    --lang=*) language=${words[offset]#--lang=}; ((offset++)) ;;
+    --lang)
+      if (( CURRENT == offset+1 )); then compadd auto zh en; return; fi
+      language=$words[offset+1]; ((offset+=2)) ;;
+    --config)
+      if (( CURRENT == offset+1 )); then _files; return; fi
+      config=$words[offset+1]; ((offset+=2)) ;;
+  esac
+done
+if [[ -z $language ]]; then
+  helper=${_SRM_COMPLETION_HELPER:-$HOME/.local/share/safe-srm/completion_ids.py}
+  [[ -r $helper ]] || helper=/usr/local/share/safe-srm/completion_ids.py
+  if [[ -r $helper ]] && (( $+commands[python3] )); then
+    language=$(python3 "$helper" language "$config" '' 2>/dev/null)
+  fi
+  language=${language:-auto}
+fi
+local chinese=false
+if [[ ${(L)encoding} = *utf-8* || ${(L)encoding} = *utf8* ]]; then
+  [[ $language = zh || $language = zh-CN || ( $language = auto && $messages = zh* ) ]] && chinese=true
+fi
+cmd_descriptions+=('--lang:选择语言 auto/zh/en' '--language-info:显示语言选择及回退原因')
+local -A translations
+translations=(
+ 'delete' 'Move files or directories into recoverable storage'
+ 'del' 'Safe deletion (delete alias)' 'restore' 'Restore by ID' 'res' 'Restore by ID'
+ 'list' 'List recoverable entries' 'ls' 'List recoverable entries'
+ 'clean' 'Permanently clean expired entries' 'cln' 'Clean expired entries'
+ 'empty' 'Confirm and permanently empty trash' 'doctor' 'Inspect incomplete or damaged records'
+ 'recover' 'Reconcile a journal with a complete backup' 'config' 'Show or initialize configuration'
+ 'remote' 'Manage SSH storage' 'help' 'Show command help'
+ '--rm' 'Parse rm-compatible file operands' '--config' 'Configuration file path'
+ '--lang' 'Select auto, zh or en' '--language-info' 'Show language selection diagnostics'
+ '--help' 'Show help' '--version' 'Show version' 'init' 'Initialize configured remote directory'
+ 'status' 'Show local upload queue' 'sync' 'Upload pending entries' 'retarget' 'Retarget pending entries'
+ '--target' 'Restore destination path' '-t' 'Restore destination path' '--yes' 'Skip confirmation' '-y' 'Skip confirmation'
+ '--json' 'Output JSON' '--expired' 'Expired entries only' '--verbose' 'Detailed output' '-v' 'Detailed output'
+ '--measure' 'Scan directory sizes' '--all' 'Permanently clean all completed entries' '-a' 'Clean all completed entries'
+ '--dry-run' 'Preview without deleting' '--init' 'Create config without overwriting'
+ '--force' 'Force / suppress prompts (see command help)' '-f' 'Force / suppress prompts'
+ '-i' 'Confirm each removal' '-I' 'Confirm once for recursive or large batches'
+ '-r' 'Recursive directories' '-R' 'Recursive directories' '--recursive' 'Recursive directories'
+ '--interactive=' 'Confirmation mode' '--one-file-system' 'Skip other filesystems'
+ '--preserve-root' 'Protect root directory' '--no-preserve-root' 'Disable root special handling'
+ '--' 'Treat following words as filenames' '-d' 'Empty directories; retention days in del mode'
+ '--dir' 'Allow empty directories' '--expire-days' 'Retention days'
+)
+_srm_describe() {
+  if $chinese; then _describe "$@"; return; fi
+  local item key
+  local -a translated
+  for item in "${(@P)2}"; do
+    key=${item%%:*}
+    translated+=("$key:${translations[$key]:-${item#*:}}")
+  done
+  _describe 'srm suggestions' translated
+}
+if [[ $words[CURRENT-1] = --target || $words[CURRENT-1] = -t || $words[CURRENT-1] = --config ]]; then
+  _files; return
+fi
+command=$words[offset]
+local index
+for ((index=offset; index<CURRENT; index++)); do
+  if [[ $words[index] = -- ]]; then _files; return; fi
+done
+if (( CURRENT == offset )); then
+  _srm_describe 'srm 功能' cmd_descriptions
+  _files
+  return
+fi
+if [[ $command = remote ]]; then
+  sub=$words[offset+1]
+  if (( CURRENT == offset+1 )); then _srm_describe '远程功能' remote_commands; return; fi
+  case $sub in
+    restore) options=('--target:恢复到指定路径' '-t:恢复到指定路径' '--help:显示帮助') ;;
+    delete|retarget) options=('--yes:跳过确认' '-y:跳过确认' '--help:显示帮助') ;;
+    *) options=('--help:显示帮助') ;;
+  esac
+  _srm_describe '选项' options
+  return
+fi
+case $command in
+ list|ls) options=('--json:输出 JSON' '--expired:只显示过期项' '--verbose:详细元数据' '-v:详细元数据' '--measure:扫描目录计算大小' '--help:显示帮助') ;;
+ clean|cln) options=('--all:永久清理所有已完成项' '-a:永久清理所有已完成项' '--dry-run:仅预览，不删除' '--help:显示帮助') ;;
+ empty) options=('--yes:跳过永久清空确认' '-y:跳过确认' '--help:显示帮助') ;;
+ config) options=('--init:创建配置，不覆盖现有文件' '--help:显示帮助') ;;
+ doctor|recover) options=('--help:显示帮助') ;;
+ restore|res) options=('--force:回收冲突目标后恢复' '-f:回收冲突目标后恢复' '--target:指定恢复路径' '-t:指定恢复路径' '--help:显示帮助') ;;
+ help) _srm_describe '子命令' cmd_descriptions; return ;;
+ *)
+   options=('-f:忽略不存在的文件，不询问' '-i:逐项确认' '-I:批量或递归时确认一次' '-r:允许递归目录' '-R:允许递归目录' '-v:显示操作详情' '--force:忽略不存在的文件，不询问' '--recursive:递归处理目录' '--verbose:显示操作详情' '--interactive=:设置确认方式' '--one-file-system:跳过不同设备的子目录' '--preserve-root:保护根目录' '--no-preserve-root:关闭根目录特判' '--help:显示帮助' '--:后续全部视为文件名')
+   if [[ $command = delete || $command = del ]]; then
+     options+=('-d:设置保留天数' '--expire-days:设置保留天数')
+   else
+     options+=('-d:仅允许空目录' '--dir:允许空目录')
+   fi ;;
+esac
+if [[ $words[CURRENT-1] = --expire-days || ( $words[CURRENT-1] = -d && ( $command = del || $command = delete ) ) ]]; then
+  compadd 0 1 3 7 14 30 90; return
+fi
+if [[ $words[CURRENT] = --interactive=* ]]; then
+  compadd -- --interactive=never --interactive=once --interactive=always; return
+fi
+_srm_describe '参数说明' options
+if [[ $command = restore || $command = res || $command = recover ]]; then
+  helper=${_SRM_COMPLETION_HELPER:-$HOME/.local/share/safe-srm/completion_ids.py}
+  [[ -r $helper ]] || helper=/usr/local/share/safe-srm/completion_ids.py
+  # sudo completion must not reveal the caller's unrelated IDs or ask for passwords.
+  if [[ $words[1] != sudo && -r $helper ]] && (( $+commands[python3] )); then
+    ids=("${(@f)$(python3 "$helper" zsh "$config" "$words[CURRENT]" 2>/dev/null)}")
+    _describe '恢复 ID — 原路径' ids
+  fi
+elif [[ $command != list && $command != ls && $command != clean && $command != cln && $command != empty && $command != config && $command != doctor ]]; then
+  _files
+fi

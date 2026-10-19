@@ -1,0 +1,10 @@
+safe-srm standalone installation (Linux x86_64)
+
+1. Extract the archive and enter its directory.
+2. Run: bash scripts/install.sh --binary ./srm
+   For system-wide srm: sudo bash scripts/install-system.sh --binary ./srm
+3. Use srm FILE, srm -rf DIRECTORY, srm list, srm restore ID.
+
+Do NOT use --replace-rm: system rm remains unchanged.
+See docs/LINUX-COMPATIBILITY.md for required tools and tested coverage.
+See docs/REMOTE-AND-PERFORMANCE.md for configuration and remote storage.

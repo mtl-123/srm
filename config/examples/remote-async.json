@@ -1,0 +1,19 @@
+{
+  "backend": "remote_async",
+  "local_store": null,
+  "volume_stores": [],
+  "expire_days": 7,
+  "batch_size": 256,
+  "directory_strategy": "checked",
+  "remote": {
+    "host": "storage.example.invalid",
+    "user": "backup",
+    "port": 22,
+    "directory": "/srv/safe-srm",
+    "namespace": "my-machine-1000",
+    "identity_file": "/home/your-user/.ssh/srm_ed25519",
+    "known_hosts_file": "/home/your-user/.ssh/known_hosts",
+    "release_local_after_upload": true,
+    "timeout_seconds": 86400
+  }
+}

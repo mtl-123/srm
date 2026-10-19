@@ -1,0 +1,117 @@
+name: CI and Linux release
+on:
+  push:
+    branches: [master, main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: srm-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -C target-cpu=x86-64
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Formatting and lint
+        run: |
+          cargo fmt --check
+          cargo clippy --locked --all-targets -- -D warnings
+      - name: Shell and Python syntax
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y zsh
+          bash -n scripts/*.sh completions/srm.bash
+          zsh -n _srm
+          python3 -m compileall -q tests remote completions
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: python3 scripts/check-release.py
+  linux:
+    needs: checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [x86_64-unknown-linux-gnu, x86_64-unknown-linux-musl]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y musl-tools zsh openssh-server
+      - name: Build release
+        env:
+          CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER: musl-gcc
+        run: cargo build --release --locked --target ${{ matrix.target }}
+      - name: Functional, language and completion tests
+        run: |
+          python3 tests/integration.py target/${{ matrix.target }}/release/srm
+          python3 tests/language.py target/${{ matrix.target }}/release/srm
+          python3 tests/completions.py
+      - name: Mount boundaries, disk-full, root and real SSH
+        run: |
+          sudo unshare --mount --propagation private python3 tests/mounts.py "$(realpath target/${{ matrix.target }}/release/srm)" "$USER"
+          sudo python3 tests/root_integration.py "$(realpath target/${{ matrix.target }}/release/srm)" "$USER"
+          sudo python3 tests/remote_integration.py "$(realpath target/${{ matrix.target }}/release/srm)" "$USER"
+      - name: Verify static ELF
+        if: matrix.target == 'x86_64-unknown-linux-musl'
+        run: |
+          readelf -h target/${{ matrix.target }}/release/srm
+          if readelf -l target/${{ matrix.target }}/release/srm | grep -q INTERP; then exit 1; fi
+          if readelf -d target/${{ matrix.target }}/release/srm | grep -q NEEDED; then exit 1; fi
+      - name: Package binary and installation archive
+        run: |
+          bash scripts/package.sh target/${{ matrix.target }}/release/srm ${{ matrix.target }}
+          cd dist
+          sha256sum -c ./*.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: safe-srm-${{ matrix.target }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+            dist/srm-*
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [checks, linux]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: safe-srm-*
+          path: dist
+          merge-multiple: true
+      - name: Verify and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_REPO: ${{ github.repository }}
+        run: |
+          cd dist
+          sha256sum -c ./*.sha256
+          if gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" >/dev/null 2>&1; then
+            echo 'Release already exists; refusing to overwrite published binaries.' >&2
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" ./* --repo "$RELEASE_REPO" --verify-tag --generate-notes

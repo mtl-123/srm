@@ -1,0 +1,10 @@
+[Unit]
+Description=Retry safe-srm remote upload queue
+
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=1min
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target
