@@ -41,7 +41,7 @@ PidFile {control}/sshd.pid
 AuthorizedKeysFile {key}.pub
 PasswordAuthentication no
 KbdInteractiveAuthentication no
-UsePAM no
+UsePAM yes
 AllowUsers {user.pw_name}
 StrictModes yes
 LogLevel ERROR
@@ -70,7 +70,7 @@ def call(cfg, *args, check=True):
                        user=user.pw_uid, group=user.pw_gid, extra_groups=[],
                        env={**os.environ, "HOME": user.pw_dir}, capture_output=True, text=True, timeout=40)
     if check:
-        assert p.returncode == 0, (args, p.stdout, p.stderr)
+        assert p.returncode == 0, (args, p.stdout, p.stderr, (control / "sshd.log").read_text()[-1500:])
     return p
 
 
