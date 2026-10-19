@@ -76,7 +76,8 @@ if $activate_bash; then
     fi
 fi
 printf 'Installed: %s\n' "$destination/srm"
-if [[ ! -e "$config/config.json" ]]; then "$destination/srm" config --init; fi
+settings_file="${SRM_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/safe-srm/config.json}"
+if [[ ! -e "$settings_file" ]]; then "$destination/srm" --config "$settings_file" config --init; fi
 if $enable_timer; then
     mkdir -p -- "$HOME/.config/systemd/user"
     install -m 0644 "$project/systemd/safe-srm-upload.service" "$HOME/.config/systemd/user/"

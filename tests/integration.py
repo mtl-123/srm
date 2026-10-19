@@ -335,7 +335,8 @@ class Integration(unittest.TestCase):
         home = self.root / "fake-home"
         home.mkdir()
         (home / ".bashrc").write_text("# existing config\n")
-        env = {**self.env, "HOME": str(home)}
+        env = {**self.env, "HOME": str(home), "XDG_CONFIG_HOME": str(home / "xdg-config")}
+        env.pop("SRM_CONFIG", None)
         scripts = Path(__file__).resolve().parents[1] / "scripts"
         args = ["bash", str(scripts / "install.sh"), "--binary", str(BINARY), "--replace-rm", "--activate-bash"]
         for _ in range(2):
