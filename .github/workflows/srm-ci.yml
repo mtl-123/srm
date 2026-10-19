@@ -61,7 +61,12 @@ jobs:
         run: cargo build --release --locked --target ${{ matrix.target }}
       - name: Functional, language and completion tests
         run: |
-          python3 tests/integration.py target/${{ matrix.target }}/release/srm
+          if ! python3 tests/integration.py target/${{ matrix.target }}/release/srm > /tmp/srm-test.log 2>&1; then
+            cat /tmp/srm-test.log
+            python3 -c 'from pathlib import Path; s=Path("/tmp/srm-test.log").read_text()[-12000:]; print("::error title=Integration test details::"+s.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+            exit 1
+          fi
+          cat /tmp/srm-test.log
           python3 tests/language.py target/${{ matrix.target }}/release/srm
           python3 tests/completions.py
       - name: Mount boundaries, disk-full, root and real SSH
