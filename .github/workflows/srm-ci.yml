@@ -71,9 +71,17 @@ jobs:
           python3 tests/completions.py
       - name: Mount boundaries, disk-full, root and real SSH
         run: |
-          sudo unshare --mount --propagation private python3 tests/mounts.py "$(realpath target/${{ matrix.target }}/release/srm)" "$USER"
-          sudo python3 tests/root_integration.py "$(realpath target/${{ matrix.target }}/release/srm)" "$USER"
-          sudo python3 tests/remote_integration.py "$(realpath target/${{ matrix.target }}/release/srm)" "$USER"
+          diagnose() {
+            if ! "$@" > /tmp/srm-privileged.log 2>&1; then
+              cat /tmp/srm-privileged.log
+              python3 -c 'from pathlib import Path; s=Path("/tmp/srm-privileged.log").read_text()[-3000:]; print("::error title=Privileged test details::"+s.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+              exit 1
+            fi
+            cat /tmp/srm-privileged.log
+          }
+          diagnose sudo unshare --mount --propagation private python3 tests/mounts.py "$(realpath target/${{ matrix.target }}/release/srm)" "$USER"
+          diagnose sudo python3 tests/root_integration.py "$(realpath target/${{ matrix.target }}/release/srm)" "$USER"
+          diagnose sudo python3 tests/remote_integration.py "$(realpath target/${{ matrix.target }}/release/srm)" "$USER"
       - name: Verify static ELF
         if: matrix.target == 'x86_64-unknown-linux-musl'
         run: |
