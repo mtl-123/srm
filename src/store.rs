@@ -118,10 +118,16 @@ fn private_dir(path: &Path) -> io::Result<()> {
         Err(e) => return Err(e),
     }
     let m = fs::symlink_metadata(path)?;
-    if !m.is_dir() || m.uid() != unsafe { libc::geteuid() } || m.mode() & 0o077 != 0 {
+    if !m.is_dir() || m.uid() != unsafe { libc::geteuid() } {
         return Err(io::Error::other(format!(
-            "{} must be a real, user-owned directory with mode 0700",
-            path.display()
+            "{}: unsafe store directory: type={:?}, owner uid={}, current uid={}; refusing to follow links or change ownership",
+            path.display(), m.file_type(), m.uid(), unsafe { libc::geteuid() }
+        )));
+    }
+    if m.mode() & 0o777 != 0o700 {
+        return Err(io::Error::other(format!(
+            "{}: store directory mode is {:04o}, required 0700; run srm doctor --repair-permissions as the directory owner",
+            path.display(), m.mode() & 0o777
         )));
     }
     Ok(())
@@ -329,8 +335,7 @@ fn measure(path: &Path) -> io::Result<u64> {
 }
 
 impl Store {
-    pub fn open() -> io::Result<Self> {
-        let settings = config::load()?;
+    fn base_path(settings: &Settings) -> io::Result<PathBuf> {
         let base = if let Some(p) = &settings.local_store {
             p.clone()
         } else if config::root() {
@@ -350,6 +355,85 @@ impl Store {
         if !base.is_absolute() {
             return Err(io::Error::other("trash location must be an absolute path"));
         }
+        Ok(base)
+    }
+
+    pub fn repair_permissions() -> io::Result<()> {
+        let settings = config::load()?;
+        let base = Self::base_path(&settings)?;
+        // Open every component without following links. Only known management
+        // directories are changed; payloads, journals and ownership are untouched.
+        let mut paths = vec![base.clone()];
+        for name in ["files", "meta", "locks", "staging"] {
+            paths.push(base.join(name));
+        }
+        let mut directories = Vec::new();
+        for path in paths {
+            let mut dir = OpenOptions::new()
+                .read(true)
+                .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+                .open("/")?;
+            let mut missing = false;
+            for component in path.components() {
+                let std::path::Component::Normal(name) = component else {
+                    if matches!(component, std::path::Component::RootDir) {
+                        continue;
+                    }
+                    return Err(io::Error::other(
+                        "repair requires an absolute path without '.' or '..'",
+                    ));
+                };
+                let name = CString::new(name.as_bytes()).map_err(io::Error::other)?;
+                let fd = unsafe {
+                    libc::openat(
+                        dir.as_raw_fd(),
+                        name.as_ptr(),
+                        libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+                    )
+                };
+                if fd < 0 {
+                    let e = io::Error::last_os_error();
+                    if e.kind() == io::ErrorKind::NotFound {
+                        missing = true;
+                        break;
+                    }
+                    return Err(e);
+                }
+                use std::os::fd::FromRawFd;
+                dir = unsafe { File::from_raw_fd(fd) };
+                let m = dir.metadata()?;
+                if m.uid() != 0 && m.uid() != unsafe { libc::geteuid() } {
+                    return Err(io::Error::other("repair refuses foreign-owned ancestor"));
+                }
+                if m.mode() & 0o022 != 0 {
+                    return Err(io::Error::other(
+                        "repair refuses group/world-writable path components",
+                    ));
+                }
+            }
+            if missing {
+                continue;
+            }
+            if dir.metadata()?.uid() != unsafe { libc::geteuid() } {
+                return Err(io::Error::other(format!(
+                    "{}: wrong owner; repair never changes ownership",
+                    path.display()
+                )));
+            }
+            directories.push((path, dir));
+        }
+        for (path, dir) in directories {
+            use std::os::unix::fs::PermissionsExt;
+            dir.set_permissions(fs::Permissions::from_mode(0o700))?;
+            dir.sync_all()?;
+            println!("secured directory: {} (0700)", path.display());
+        }
+        Ok(())
+    }
+
+    pub fn open() -> io::Result<Self> {
+        let settings = config::load()?;
+        let base = Self::base_path(&settings)?;
         if config::root() {
             config::trusted_root_path(&base)?;
         }

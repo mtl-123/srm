@@ -33,7 +33,7 @@ while [[ $words[offset] = --config || $words[offset] = --lang || $words[offset] 
   esac
 done
 if [[ -z $language ]]; then
-  helper=${_SRM_COMPLETION_HELPER:-$HOME/.local/share/safe-srm/completion_ids.py}
+  helper=${_SRM_COMPLETION_HELPER:-$HOME/.local/lib/safe-srm/completion_ids.py}
   [[ -r $helper ]] || helper=/usr/local/share/safe-srm/completion_ids.py
   if [[ -r $helper ]] && (( $+commands[python3] )); then
     language=$(python3 "$helper" language "$config" '' 2>/dev/null)
@@ -109,7 +109,8 @@ case $command in
  clean|cln) options=('--all:永久清理所有已完成项' '-a:永久清理所有已完成项' '--dry-run:仅预览，不删除' '--help:显示帮助') ;;
  empty) options=('--yes:跳过永久清空确认' '-y:跳过确认' '--help:显示帮助') ;;
  config) options=('--init:创建配置，不覆盖现有文件' '--help:显示帮助') ;;
- doctor|recover) options=('--help:显示帮助') ;;
+ doctor) options=('--repair-permissions:收紧本人管理目录权限，不修改回收文件' '--help:显示帮助') ;;
+ recover) options=('--help:显示帮助') ;;
  restore|res) options=('--force:回收冲突目标后恢复' '-f:回收冲突目标后恢复' '--target:指定恢复路径' '-t:指定恢复路径' '--help:显示帮助') ;;
  help) _srm_describe '子命令' cmd_descriptions; return ;;
  *)
@@ -128,7 +129,7 @@ if [[ $words[CURRENT] = --interactive=* ]]; then
 fi
 _srm_describe '参数说明' options
 if [[ $command = restore || $command = res || $command = recover ]]; then
-  helper=${_SRM_COMPLETION_HELPER:-$HOME/.local/share/safe-srm/completion_ids.py}
+  helper=${_SRM_COMPLETION_HELPER:-$HOME/.local/lib/safe-srm/completion_ids.py}
   [[ -r $helper ]] || helper=/usr/local/share/safe-srm/completion_ids.py
   # sudo completion must not reveal the caller's unrelated IDs or ask for passwords.
   if [[ $words[1] != sudo && -r $helper ]] && (( $+commands[python3] )); then

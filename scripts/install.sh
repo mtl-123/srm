@@ -17,9 +17,13 @@ while (($#)); do
         *) printf 'Unknown option: %s\n' "$1" >&2; exit 1 ;;
     esac
 done
+[[ $EUID != 0 ]] || { echo "Use scripts/install-system.sh for root/system installation." >&2; exit 1; }
 [[ "$HOME" = /* && -n "$HOME" && "$HOME" != / ]] || { echo 'HOME must be an absolute user directory' >&2; exit 1; }
 [[ -x "$binary" ]] || { echo 'Build with cargo build --release first, or use --binary FILE' >&2; exit 1; }
-"$binary" --version
+if ! "$binary" --version; then
+    echo "Cannot execute binary; use the x86_64-unknown-linux-musl static package." >&2
+    exit 1
+fi
 destination="$HOME/.local/lib/safe-srm"
 bin_dir="$HOME/.local/bin"
 config="$HOME/.config/safe-srm"
@@ -32,12 +36,12 @@ for name in srm $($replace_rm && printf rm || true); do
     fi
 done
 mkdir -p -- "$destination" "$bin_dir" "$config"
-mkdir -p -- "$HOME/.local/share/bash-completion/completions" "$HOME/.local/share/zsh/site-functions" "$HOME/.local/share/safe-srm"
+mkdir -p -- "$HOME/.local/share/bash-completion/completions" "$HOME/.local/share/zsh/site-functions"
 install -m 0644 "$project/completions/srm.bash" "$HOME/.local/share/bash-completion/completions/srm"
 zsh_source="$project/_srm"
 [[ -f "$zsh_source" ]] || zsh_source="$project/completions/_srm"
 install -m 0644 "$zsh_source" "$HOME/.local/share/zsh/site-functions/_srm"
-install -m 0644 "$project/completions/completion_ids.py" "$HOME/.local/share/safe-srm/completion_ids.py"
+install -m 0644 "$project/completions/completion_ids.py" "$destination/completion_ids.py"
 install -m 0755 -- "$binary" "$destination/srm.new"
 mv -f -- "$destination/srm.new" "$destination/srm"
 ln -sfn -- "$destination/srm" "$bin_dir/srm"
@@ -87,3 +91,8 @@ if $enable_timer; then
 fi
 printf 'Activate in this shell: source %q\n' "$config/env.sh"
 printf 'Permanent deletion escape: /bin/rm -- FILE\n'
+printf 'User installation only. For sudo use scripts/install-system.sh, then sudo /usr/local/bin/srm.\n'
+if ! "$destination/srm" --config "$settings_file" doctor >/dev/null; then
+    printf 'Storage needs attention. For user-owned directories with broad permissions: srm doctor --repair-permissions\n' >&2
+    exit 1
+fi

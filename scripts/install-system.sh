@@ -15,6 +15,10 @@ while (($#)); do
     esac
 done
 [[ -x "$binary" ]] || { echo 'Build the release executable first.' >&2; exit 1; }
+if ! "$binary" --version; then
+    echo "Cannot execute binary; use the x86_64-unknown-linux-musl static package." >&2
+    exit 1
+fi
 destination=/usr/local/lib/safe-srm
 names=(srm)
 $replace_rm && names+=(rm)
@@ -47,3 +51,4 @@ printf 'Installed root-owned executable: %s/srm\n' "$destination"
 printf 'Root config: /etc/safe-srm/config.json\nRoot store: /var/lib/safe-srm/root (unless configured otherwise)\n'
 printf 'Use: sudo /usr/local/bin/srm --rm FILE\n'
 printf 'sudo rm uses this implementation only when sudo secure_path includes /usr/local/bin before /usr/bin.\n'
+"$destination/srm" doctor >/dev/null

@@ -72,7 +72,7 @@ _srm_complete() {
         recover) options='--help' ;;
         clean|cln) options='--all -a --dry-run --help' ;;
         empty) options='--yes -y --help' ;;
-        doctor) options='--help' ;;
+        doctor) options='--repair-permissions --help' ;;
         del|delete) options='--expire-days -d -f -i -I -r -R -v --force --interactive= --recursive --verbose --one-file-system --preserve-root --no-preserve-root --help --' ;;
         help) mapfile -t COMPREPLY < <(compgen -W 'list restore clean empty doctor recover config remote' -- "$current"); return ;;
     esac
@@ -83,7 +83,7 @@ _srm_complete() {
         restore|res|recover)
             [[ ${COMP_WORDS[0]##*/} = sudo ]] && return
             [[ -n ${SUDO_COMMAND:-} ]] && return
-            helper="${_SRM_COMPLETION_HELPER:-$HOME/.local/share/safe-srm/completion_ids.py}"
+            helper="${_SRM_COMPLETION_HELPER:-$HOME/.local/lib/safe-srm/completion_ids.py}"
             [[ -f $helper ]] || helper=/usr/local/share/safe-srm/completion_ids.py
             if [[ -r $helper ]] && command -v python3 >/dev/null; then
                 mapfile -t COMPREPLY < <(python3 "$helper" bash "$config" "$current" 2>/dev/null)

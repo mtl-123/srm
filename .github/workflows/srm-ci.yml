@@ -91,6 +91,7 @@ jobs:
       - name: Package binary and installation archive
         run: |
           bash scripts/package.sh target/${{ matrix.target }}/release/srm ${{ matrix.target }}
+          python3 tests/package_install.py dist/*.tar.gz
           cd dist
           sha256sum -c ./*.sha256
       - uses: actions/upload-artifact@v4

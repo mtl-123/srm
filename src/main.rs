@@ -72,7 +72,13 @@ enum Command {
         yes: bool,
     },
     #[command(about = "Inspect pending/damaged journals without deleting data")]
-    Doctor,
+    Doctor {
+        #[arg(
+            long,
+            help = "Tighten owned management directories to 0700; never change ownership or payload files"
+        )]
+        repair_permissions: bool,
+    },
     #[command(about = "Reconcile an interrupted journal that has a known complete backup")]
     Recover { id: String },
     #[command(about = "Show configuration, or create a private editable example")]
@@ -219,6 +225,14 @@ fn run() -> Result<i32, Box<dyn std::error::Error>> {
         }
         return Ok(0);
     }
+    if matches!(
+        cli.command,
+        Command::Doctor {
+            repair_permissions: true
+        }
+    ) {
+        store::Store::repair_permissions()?;
+    }
     let mut store = store::Store::open()?;
     let mut failed = false;
     match cli.command {
@@ -266,7 +280,7 @@ fn run() -> Result<i32, Box<dyn std::error::Error>> {
             json,
             measure,
         } => store.list(expired, verbose, json, measure)?,
-        Command::Doctor => failed = !store.doctor()?,
+        Command::Doctor { .. } => failed = !store.doctor()?,
         Command::Recover { id } => {
             store.recover(&id)?;
             println!("journal {id} is restorable; use srm restore {id}");

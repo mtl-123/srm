@@ -59,3 +59,20 @@ result = subprocess.run([binary, "--config", str(unsafe_config), "--rm", str(sou
 assert result.returncode != 0 and source.exists()
 print("root refuses config below a user-owned ancestor: passed")
 print("Root test evidence:", root)
+
+foreign = root / "foreign-store"
+foreign.mkdir(mode=0o755)
+os.chown(foreign, user.pw_uid, user.pw_gid)
+config.write_text(json.dumps({"local_store": str(foreign)}))
+assert call("doctor", "--repair-permissions", check=False).returncode != 0
+assert foreign.stat().st_uid == user.pw_uid and foreign.stat().st_mode & 0o777 == 0o755
+print("Root repair refuses foreign ownership without changing it: passed")
+
+# The system installer must validate its executable before touching any paths.
+broken = root / "broken-binary"
+broken.write_text("#!/bin/sh\necho GLIBC_2.39_not_found >&2\nexit 1\n")
+broken.chmod(0o755)
+installer = Path(__file__).resolve().parents[1] / "scripts/install-system.sh"
+failed = subprocess.run(["bash", str(installer), "--binary", str(broken)], capture_output=True, text=True)
+assert failed.returncode != 0 and "musl" in failed.stderr
+print("System installation rejects an incompatible executable before installation: passed")

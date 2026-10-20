@@ -155,6 +155,10 @@ pub fn command(mut cmd: clap::Command, scope: &str) -> clap::Command {
     for id in args {
         let help = match id.as_str() {
             "expired" => text("Only show expired entries", "只显示已过期条目"),
+            "repair_permissions" => text(
+                "Tighten owned management directories to 0700; never change ownership or payloads",
+                "仅收紧本人管理目录为 0700，不改变属主或回收文件权限",
+            ),
             "verbose" => text("Show full metadata", "显示详细元数据"),
             "json" => text(
                 "Output JSON (field names are not translated)",

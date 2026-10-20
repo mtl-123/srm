@@ -364,6 +364,70 @@ class Integration(unittest.TestCase):
         self.assertNotEqual(installed.returncode, 0)
         self.assertEqual(other.read_text(), "do not overwrite")
 
+    def test_fresh_default_install_then_delete_and_restore(self):
+        home = self.root / "fresh-home"
+        home.mkdir()
+        env = {k: v for k, v in os.environ.items() if k not in
+               ("SRM_HOME", "SRM_CONFIG", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "SRM_LANG")}
+        env["HOME"] = str(home)
+        script = Path(__file__).resolve().parents[1] / "scripts/install.sh"
+        args = ["bash", str(script), "--binary", str(BINARY)]
+        for _ in range(2):
+            result = subprocess.run(args, env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+        binary = home / ".local/bin/srm"
+        store = home / ".local/share/safe-srm"
+        self.assertEqual(store.stat().st_mode & 0o777, 0o700)
+        self.assertFalse((store / "completion_ids.py").exists())
+        self.assertTrue((home / ".local/lib/safe-srm/completion_ids.py").exists())
+        self.assertFalse((home / ".local/bin/rm").exists())
+        source = self.data / "a"
+        content = source.read_bytes()
+        subprocess.run([str(binary), "--rm", str(source)], env=env, check=True)
+        records = json.loads(subprocess.check_output([str(binary), "ls", "--json"], env=env))
+        subprocess.run([str(binary), "res", records[0]["id"]], env=env, check=True)
+        self.assertEqual(source.read_bytes(), content)
+
+    def test_permissions_repair_keeps_payload_mode_and_content(self):
+        self.call("a", rm=True)
+        record = self.records()[0]
+        payload = Path(record["trash_path"])
+        payload.chmod(0o640)
+        content = payload.read_bytes()
+        for path in (self.trash, self.trash / "meta", self.trash / "files"):
+            path.chmod(0o755)
+        failed = self.call("b", rm=True, check=False)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertIn("--repair-permissions", failed.stderr)
+        self.assertTrue((self.data / "b").exists())
+        self.call("doctor", "--repair-permissions")
+        for path in (self.trash, self.trash / "meta", self.trash / "files"):
+            self.assertEqual(path.stat().st_mode & 0o777, 0o700)
+        self.assertEqual(payload.stat().st_mode & 0o777, 0o640)
+        self.assertEqual(payload.read_bytes(), content)
+        self.call("res", record["id"])
+
+    def test_repair_refuses_symlink_and_unsafe_writable_store(self):
+        target = self.root / "unrelated"
+        target.mkdir(mode=0o755)
+        self.trash.symlink_to(target)
+        self.assertNotEqual(self.call("doctor", "--repair-permissions", check=False).returncode, 0)
+        self.assertEqual(target.stat().st_mode & 0o777, 0o755)
+        self.trash.unlink()
+        self.trash.mkdir()
+        self.trash.chmod(0o777)
+        self.assertNotEqual(self.call("doctor", "--repair-permissions", check=False).returncode, 0)
+        self.assertEqual(self.trash.stat().st_mode & 0o777, 0o777)
+
+    def test_legacy_installer_directory_repaired_explicitly(self):
+        self.trash.mkdir(mode=0o755)
+        helper = self.trash / "completion_ids.py"
+        helper.write_text("legacy resource")
+        self.call("doctor", "--repair-permissions")
+        self.assertEqual(helper.read_text(), "legacy resource")
+        self.call("a", rm=True)
+        self.call("res", self.records()[0]["id"])
+
     def test_batch_group_roundtrip_and_cleanup(self):
         paths = []
         for i in range(600):
