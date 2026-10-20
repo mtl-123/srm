@@ -396,11 +396,8 @@ class Integration(unittest.TestCase):
         content = payload.read_bytes()
         for path in (self.trash, self.trash / "meta", self.trash / "files"):
             path.chmod(0o755)
-        failed = self.call("b", rm=True, check=False)
-        self.assertNotEqual(failed.returncode, 0)
-        self.assertIn("--repair-permissions", failed.stderr)
-        self.assertTrue((self.data / "b").exists())
-        self.call("doctor", "--repair-permissions")
+        self.call("b", rm=True)
+        self.assertFalse((self.data / "b").exists())
         for path in (self.trash, self.trash / "meta", self.trash / "files"):
             self.assertEqual(path.stat().st_mode & 0o777, 0o700)
         self.assertEqual(payload.stat().st_mode & 0o777, 0o640)
@@ -427,6 +424,33 @@ class Integration(unittest.TestCase):
         self.assertEqual(helper.read_text(), "legacy resource")
         self.call("a", rm=True)
         self.call("res", self.records()[0]["id"])
+
+    def test_owned_0775_store_automatically_secured(self):
+        self.trash.mkdir()
+        self.trash.chmod(0o775)
+        self.call("del", "-d", "3", "a")
+        self.assertEqual(self.trash.stat().st_mode & 0o777, 0o700)
+        row = self.records()[0]
+        self.assertEqual(row["expire_days"], 3)
+        self.call("res", row["id"])
+        self.assertTrue((self.data / "a").exists())
+
+    def test_legacy_numeric_filename_is_not_retention(self):
+        (self.data / "3").write_text("numeric filename")
+        result = self.call("del", "3", "a")
+        self.assertIn("-d 3", result.stderr)
+        self.assertEqual(len(self.records()), 2)
+        self.assertTrue(all(row["expire_days"] == 7 for row in self.records()))
+
+    def test_unsafe_management_file_not_truncated(self):
+        self.call("list")
+        path = self.trash / "audit.rotate"
+        path.write_text("do not truncate")
+        path.chmod(0o666)
+        (self.trash / "log-date").write_text("old")
+        (self.trash / "audit.jsonl").touch(mode=0o600)
+        self.assertNotEqual(self.call("list", check=False).returncode, 0)
+        self.assertEqual(path.read_text(), "do not truncate")
 
     def test_batch_group_roundtrip_and_cleanup(self):
         paths = []

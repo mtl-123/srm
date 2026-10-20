@@ -232,6 +232,16 @@ fn parse(args: Vec<OsString>, legacy: bool) -> Result<Option<Options>, String> {
     if o.paths.is_empty() && !o.force {
         return Err("missing operand".into());
     }
+    if legacy
+        && o.paths.len() > 1
+        && o.paths[0]
+            .to_str()
+            .is_some_and(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()))
+    {
+        eprintln!("{}", crate::i18n::text(
+            "Note: a bare number is a filename. For 3-day retention use: srm del -d 3 FILE. No numeric filename is reinterpreted.",
+            "提示：单独的数字会被当成文件名。保留 3 天请用：srm del -d 3 文件。程序不会把数字文件名自动改解释为天数。"));
+    }
     Ok(Some(o))
 }
 

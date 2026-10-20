@@ -67,6 +67,17 @@ config.write_text(json.dumps({"local_store": str(foreign)}))
 assert call("doctor", "--repair-permissions", check=False).returncode != 0
 assert foreign.stat().st_uid == user.pw_uid and foreign.stat().st_mode & 0o777 == 0o755
 print("Root repair refuses foreign ownership without changing it: passed")
+assert call("--rm", source, check=False).returncode != 0
+assert source.exists() and foreign.stat().st_uid == user.pw_uid
+assert foreign.stat().st_mode & 0o777 == 0o755
+config.write_text(json.dumps({"local_store": str(root / "store")}))
+(root / "store").chmod(0o775)
+call("--rm", source)
+assert (root / "store").stat().st_mode & 0o777 == 0o700
+rows = json.loads(call("list", "--json").stdout)
+call("res", rows[0]["id"])
+assert source.exists() and source.stat().st_uid == 0
+print("Root auto-tightening handles its own 0775 store, never takes another user's store: passed")
 
 # The system installer must validate its executable before touching any paths.
 broken = root / "broken-binary"

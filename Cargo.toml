@@ -4,7 +4,7 @@ description = "Safe rm alternative with audit trail and short IDs"
 edition = "2021"
 license = "MIT"
 name = "srm"
-version = "2.1.1"
+version = "2.1.2"
 rust-version = "1.85"
 
 [dependencies]

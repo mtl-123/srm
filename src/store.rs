@@ -117,18 +117,28 @@ fn private_dir(path: &Path) -> io::Result<()> {
         }
         Err(e) => return Err(e),
     }
-    let m = fs::symlink_metadata(path)?;
+    // Inspect and tighten the opened directory, never chmod through a symlink.
+    let dir = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(path)?;
+    let m = dir.metadata()?;
     if !m.is_dir() || m.uid() != unsafe { libc::geteuid() } {
         return Err(io::Error::other(format!(
             "{}: unsafe store directory: type={:?}, owner uid={}, current uid={}; refusing to follow links or change ownership",
             path.display(), m.file_type(), m.uid(), unsafe { libc::geteuid() }
         )));
     }
-    if m.mode() & 0o777 != 0o700 {
+    if m.mode() & 0o700 != 0o700 {
         return Err(io::Error::other(format!(
-            "{}: store directory mode is {:04o}, required 0700; run srm doctor --repair-permissions as the directory owner",
+            "{}: store directory mode is {:04o}; owner access is restricted, refusing to add permissions automatically",
             path.display(), m.mode() & 0o777
         )));
+    }
+    if m.mode() & 0o077 != 0 {
+        use std::os::unix::fs::PermissionsExt;
+        dir.set_permissions(fs::Permissions::from_mode(0o700))?;
+        dir.sync_all()?;
     }
     Ok(())
 }
@@ -137,16 +147,23 @@ fn private_file(path: &Path, append: bool) -> io::Result<File> {
     let file = OpenOptions::new()
         .write(true)
         .create(true)
-        .truncate(!append)
+        .truncate(false)
         .append(append)
         .mode(0o600)
         .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
         .open(path)?;
     let m = file.metadata()?;
-    if !m.is_file() || m.uid() != unsafe { libc::geteuid() } || m.mode() & 0o077 != 0 {
+    if !m.is_file()
+        || m.nlink() != 1
+        || m.uid() != unsafe { libc::geteuid() }
+        || m.mode() & 0o077 != 0
+    {
         return Err(io::Error::other(
             "journal file must be private and owned by this user",
         ));
+    }
+    if !append {
+        file.set_len(0)?;
     }
     Ok(file)
 }
@@ -435,7 +452,16 @@ impl Store {
         let settings = config::load()?;
         let base = Self::base_path(&settings)?;
         if config::root() {
-            config::trusted_root_path(&base)?;
+            if base
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+            {
+                return Err(io::Error::other("root store path must not contain '..'"));
+            }
+            config::trusted_root_path(
+                base.parent()
+                    .ok_or_else(|| io::Error::other("invalid root store path"))?,
+            )?;
         }
         private_dir(&base)?;
         let base = fs::canonicalize(base)?;

@@ -2,7 +2,7 @@
 
 [![CI and Linux release](https://github.com/mtl-123/srm/actions/workflows/srm-ci.yml/badge.svg)](https://github.com/mtl-123/srm/actions/workflows/srm-ci.yml)
 
-当前版本：2.1.1。[下载二进制与安装包](https://github.com/mtl-123/srm/releases)。推荐 x86_64-unknown-linux-musl 静态包。
+当前版本：2.1.2。[下载二进制与安装包](https://github.com/mtl-123/srm/releases)。推荐 x86_64-unknown-linux-musl 静态包。
 默认使用独立命令 `srm`，不替换系统 `rm`。安装/权限故障见 [排查与修复](docs/TROUBLESHOOTING.md)。
 
 保留两个原项目的简写用法，推荐日常使用：
